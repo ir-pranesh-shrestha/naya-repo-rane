@@ -1,0 +1,71 @@
+name: Docker Build Matrix
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: rockylinux-8
+            dockerfile: Dockerfile.rockylinux8
+
+          - name: python-312-slim-bookworm
+            dockerfile: Dockerfile.python312-slim-bookworm
+
+          - name: python-312
+            dockerfile: Dockerfile.python312
+
+          - name: python-312-alpine
+            dockerfile: Dockerfile.python312-alpine
+
+          - name: python-395
+            dockerfile: Dockerfile.python395
+
+          - name: ubuntu-2204
+            dockerfile: Dockerfile.ubuntu2204
+
+          - name: node-12
+            dockerfile: Dockerfile.node12
+
+          - name: envoy-1330
+            dockerfile: Dockerfile.envoy1330
+
+    steps:
+      # ============= InvisiRisk Setup =============
+      - name: Setup PSE
+        uses: invisirisk/pse-action@latest
+        with:
+          api_url: "https://app.stage.invisirisk.com"
+          app_token: ${{ secrets.IR_API_KEY }}
+          mode: docker-intercept
+      # ============= InvisiRisk Setup End =============
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f ${{ matrix.dockerfile }} \
+            --build-arg BUILDKIT_SYNTAX=public.ecr.aws/w3c0c0n7/invisirisk/baf-buildkit:dev-test \
+            --secret id=pse-ca,src=/etc/ssl/certs/pse.pem \
+            --build-arg PSE_PROXY=http://${PSE_PROXY_IP}:3128 \
+            -t docker-python:${{ matrix.name }} \
+            .
+
+      # ============= InvisiRisk Cleanup =============
+      - name: Cleanup PSE
+        if: always()
+        uses: invisirisk/pse-action@latest
+        with:
+          cleanup: "true"
+      # ============= InvisiRisk Setup End =============
